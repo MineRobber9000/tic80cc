@@ -11,7 +11,7 @@ local function preprocess(src,fn)
 	preprocessor.preprocess_with_directives(src,fn)(sb.add)
 	return sb.string
 	end
-	return assert(xpcall(inner,debug.traceback))
+	return select(2,assert(xpcall(inner,debug.traceback)))
 end
 
 local __main = {} -- sentinel
