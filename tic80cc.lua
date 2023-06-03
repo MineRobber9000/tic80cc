@@ -2178,13 +2178,18 @@ function CreateLuaParser(text)
 	local function varlist()
 		local varList = {}
 		local commaList = {}
-		if peek().Type == 'Ident' then
+		if peek().Type == 'Ident' or peek().Source == '...' then
 			table.insert(varList, get())
 		end
 		while peek().Source == ',' do
 			table.insert(commaList, get())
-			local id = expect('Ident')
-			table.insert(varList, id)
+			if peek().Source == '...' then
+				table.insert(varList, get())
+				break
+			else
+				local id = expect('Ident')
+				table.insert(varList, id)
+			end
 		end
 		return varList, commaList
 	end
@@ -2259,11 +2264,16 @@ function CreateLuaParser(text)
 			local argList = {}
 			local argCommaList = {}
 			while peek().Source ~= ')' do
-				table.insert(argList, expr())
-				if peek().Source == ',' then
-					table.insert(argCommaList, get())
-				else
+				if peek().Source == "..." then
+					table.insert(argList,get())
 					break
+				else
+					table.insert(argList, expr())
+					if peek().Source == ',' then
+						table.insert(argCommaList, get())
+					else
+						break
+					end
 				end
 			end
 			local cparenTk = expect('Symbol', ')')
@@ -2999,6 +3009,7 @@ function VisitAst(ast, visitors)
 					assert(false, "unreachable")
 				end
 			end
+		elseif expr.Type=="Symbol" then
 		else
 			assert(false, "unreachable, type: "..expr.Type..":"..FormatTable(expr))
 		end
@@ -3516,6 +3527,8 @@ function PrintAst(ast)
 				end
 			end
 			printt(expr.Token_CloseBrace)
+		elseif expr.Type == 'Symbol' then
+			printt(expr)
 		else
 			assert(false, "unreachable, type: "..expr.Type..":"..FormatTable(expr))
 		end
@@ -4179,6 +4192,8 @@ local function StripAst(ast)
 				end
 			end
 			stript(expr.Token_CloseBrace)
+		elseif expr.Type == 'Symbol' then
+			stript(expr)
 		else
 			assert(false, "unreachable, type: "..expr.Type..":"..FormatTable(expr))
 		end
@@ -4498,12 +4513,14 @@ local function MinifyVariables(globalScope, rootScope, keepNames)
 	rootScope.FirstFreeName = nextFreeNameIndex
 	local function doRenameScope(scope)
 		for _, var in pairs(scope.VariableList) do
-			local varName = ''
-			repeat
-				varName = indexToVarName(scope.FirstFreeName)
-				scope.FirstFreeName = scope.FirstFreeName + 1
-			until not Keywords[varName] and not externalGlobals[varName]
-			var:Rename(varName)
+			if var.Name ~= '...' then -- don't rename ...
+				local varName = ''
+				repeat
+					varName = indexToVarName(scope.FirstFreeName)
+					scope.FirstFreeName = scope.FirstFreeName + 1
+				until not Keywords[varName] and not externalGlobals[varName]
+				var:Rename(varName)
+			end
 		end
 		for _, childScope in pairs(scope.ChildScopeList) do
 			childScope.FirstFreeName = scope.FirstFreeName
